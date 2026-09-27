@@ -111,32 +111,24 @@ Values are taken from the current run. No example text is used as a live claim.
 
 ## Architecture
 
-```mermaid
-sequenceDiagram
-    actor Dev as Developer
-    participant GH as GitHub PR
-    participant CI as GitHub Actions / PRoove
-    participant AI as Chat Completions model
-    participant WT as Git worktrees + Vitest
-    Dev->>GH: Open same-repository PR
-    GH->>CI: pull_request event (base/head SHAs)
-    CI->>AI: Base SPEC + bounded checkout diff
-    AI-->>CI: One test candidate (not evidence)
-    CI->>WT: Run same test on base and head
-    WT-->>CI: Actual PASS / FAIL / ERROR and logs
-    alt Base PASS and head FAIL
-        CI->>AI: Ask for one-line fix
-        AI-->>CI: Replacement line candidate
-        CI->>WT: Patch temporary head and rerun same test
-        WT-->>CI: Actual result
-        CI->>GH: Proof Card + suggestion only if fix passes
-        Dev->>GH: Commit suggestion
-        GH->>CI: synchronize event (new head SHA)
-        CI->>WT: Rerun original saved test on base/new head
-        CI->>GH: Update card to FIX VERIFIED if both pass
-    else No executable proof
-        CI->>GH: Update card to NOT PROVEN
-    end
+```text
+Developer                GitHub PR              PRoove + Vitest
+    |                        |                          |
+    +--- open PR ----------->+-- base/head SHAs ------>+
+    |                        |         ask model for one test
+    |                        |         run same test on both commits
+    |                        |                          |
+    |                  base PASS / head FAIL? ---------+
+    |                        |       yes: PROVEN BUG   |
+    |                        |       no: NOT PROVEN    |
+    |                        |                          |
+    |                        |       propose one-line fix
+    |                        |       test it on patched head
+    |<-- verified suggestion +-------------------------+
+    +--- Commit suggestion ->+                          |
+    |                        +-- new head SHA --------->+
+    |                        |       rerun ORIGINAL test
+    |<-- FIX VERIFIED -------+<-- base/head PASS -------+
 ```
 
 | Module | Responsibility |
