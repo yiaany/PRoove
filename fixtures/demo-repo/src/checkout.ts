@@ -14,7 +14,7 @@
 export function applyDiscount(price: number, discountPercent: number): number {
   const discounted = price * (1 - discountPercent / 100);
   // Clamp to 0 — price must never go negative (SPEC rule 1)
-  return Math.round(discounted * 100) / 100;
+  return Math.round(Math.max(0, discounted) * 100) / 100;
 }
 
 export interface CartItem {
