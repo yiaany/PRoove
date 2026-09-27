@@ -96,6 +96,17 @@ npm run bot:demo
 
 </details>
 
+<h2 align="center">Watch the checkout regression</h2>
+
+The visual demo uses the real `applyDiscount` function from `fixtures/demo-repo/src/checkout.ts`. From the repository root, run:
+
+```bash
+npm ci
+npm run checkout:dev
+```
+
+Open the local address Vite prints (usually `http://localhost:5173/`). The page starts with a $100 item and a 150% discount. On `main`, the final total is **$0.00**. To film the regression, record this state, then switch your local checkout to a separate PR branch containing the one-line change that removes `Math.max(0, discounted)`. Keep the dev server running (or restart it if needed) and reload the same page: the final total becomes **−$50.00**. Return to the page in the PR and show PRoove's evidence and verified suggestion. The page only displays the symptom; proof lives in GitHub Actions and the PR comments. Run `npm run checkout:build` to check the frontend build.
+
 <h2 align="center">A deliberately narrow proof boundary</h2>
 
 - The workflow runs on `pull_request` (`opened`, `reopened`, `synchronize`) for **same-repository** branches. It skips fork PRs rather than exposing repository secrets.

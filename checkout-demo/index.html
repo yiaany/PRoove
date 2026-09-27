@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f7f5" />
+    <title>Checkout Demo — PRoove</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <div class="page">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="PRoove Checkout Demo home">
+          <span class="brand-symbol" aria-hidden="true">P<span class="brand-dot">.</span></span>
+          <span class="brand-name">PRoove <span class="brand-divider">/</span> <span class="brand-detail">Checkout Demo</span></span>
+        </a>
+        <span class="header-meta">THE CHECKOUT EXPERIMENT <span class="meta-index">— 001</span></span>
+      </header>
+
+      <main>
+        <div class="intro">
+          <div class="eyebrow"><span class="eyebrow-line"></span> A SMALL TEST OF A BIG RULE</div>
+          <h1>The final number<br /><em>matters.</em></h1>
+          <p>One object. One discount. The same checkout logic running in the real codebase.</p>
+        </div>
+
+        <div class="checkout-layout">
+          <section class="product" aria-labelledby="product-title">
+            <div class="product-art" role="img" aria-label="Abstract sculptural object standing on a circular plinth">
+              <span class="art-caption">FIG. 01 <span>—</span> EVERYDAY OBJECT</span>
+              <svg viewBox="0 0 640 510" aria-hidden="true" focusable="false" class="object-illustration">
+                <ellipse cx="322" cy="435" rx="204" ry="25" fill="#dededb" />
+                <path d="M118 385v49c0 31 91 55 204 55s204-24 204-55v-49" fill="#d2d2cf" />
+                <ellipse cx="322" cy="385" rx="204" ry="55" fill="#eeeeeb" />
+                <path d="M258 159c-13-28-16-63-3-91 13-29 42-46 73-46 36 0 70 25 76 64 6 35-9 65-26 91l-21 32v102h-80V208z" fill="#30302f" />
+                <path d="M258 159c-13-28-16-63-3-91 13-29 42-46 73-46 9 0 19 2 28 5-32 6-56 31-59 65-3 29 6 52 19 70l17 47v102h-56V208z" fill="#50504e" />
+                <ellipse cx="317" cy="316" rx="107" ry="28" fill="#353534" />
+                <path d="M210 316v47c0 16 48 29 107 29s107-13 107-29v-47" fill="#292928" />
+                <ellipse cx="317" cy="316" rx="107" ry="28" fill="#5b5b58" />
+                <ellipse cx="317" cy="311" rx="69" ry="14" fill="#3c3c3a" />
+                <path d="M277 207c12 18 28 27 47 27 17 0 30-9 33-25v101h-80z" fill="#353534" />
+              </svg>
+              <span class="art-edition">AN EXERCISE IN SIMPLICITY</span>
+            </div>
+            <div class="product-details">
+              <div>
+                <span class="overline">01 / THE OBJECT</span>
+                <h2 id="product-title">Everyday Object</h2>
+                <p>A single item in your order.</p>
+              </div>
+              <div class="product-price" aria-label="Price: 100 dollars">$100.00</div>
+            </div>
+          </section>
+
+          <section class="order" aria-labelledby="order-title">
+            <div class="order-heading">
+              <span class="overline">02 / THE CHECKOUT</span>
+              <h2 id="order-title">Your order<span class="heading-period">.</span></h2>
+              <p>Change the discount to see the final total.</p>
+            </div>
+
+            <div class="discount-field">
+              <label for="discount">Discount percentage</label>
+              <div class="input-shell">
+                <input id="discount" name="discount" type="number" min="0" step="any" value="150" inputmode="decimal" aria-describedby="discount-help" />
+                <span class="input-suffix" aria-hidden="true">%</span>
+              </div>
+              <span id="discount-help" class="field-help">TRY A VALUE ABOVE 100 TO TEST THE LIMIT</span>
+            </div>
+
+            <div class="summary" aria-label="Order summary">
+              <div class="summary-row"><span>Original price</span><span class="mono">$100.00</span></div>
+              <div class="summary-row"><span>Discount applied</span><span class="mono" id="discount-amount">−$100.00</span></div>
+            </div>
+
+            <div class="total-panel" id="total-panel">
+              <div class="total-header"><span>FINAL TOTAL</span><span class="total-index">USD / 01</span></div>
+              <div class="total-value" id="final-total" aria-live="polite">$0.00</div>
+              <div class="regression-label" id="regression-label" hidden>REGRESSION DETECTED <span aria-hidden="true">↗</span></div>
+            </div>
+
+            <div class="contract-note">
+              <span class="note-symbol" aria-hidden="true">i</span>
+              <p>Expected behavior: the final total must never be negative.</p>
+            </div>
+
+            <a class="pr-link" href="https://github.com/yiaany/PRoove/pull/2" target="_blank" rel="noopener noreferrer">Inspect the real PR <span aria-hidden="true">↗</span></a>
+          </section>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <span>PRoove — The model proposes. Tests prove. A human approves.</span>
+        <span class="footer-mark">PROOF, NOT PROMISES. <span aria-hidden="true">↗</span></span>
+      </footer>
+    </div>
+  </body>
+</html>
