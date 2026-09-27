@@ -2,7 +2,7 @@
 
 **GitHub Actions code-review bot that proves regressions with reproducible test evidence.**
 
-PRoove analyzes a pull request, proposes a regression test via an OpenAI-compatible model, runs the exact same test against both the base and head revisions, and posts a single Markdown comment to the PR. If the test passes on base and fails on head, the comment is labeled **PROVEN BUG**. Otherwise it is **NOT PROVEN** — PRoove never fabricates test output or claims.
+PRoove analyzes a pull request, proposes a regression test via an OpenAI-compatible model, runs the exact same test against both the base and head revisions, and posts a single Markdown comment to the PR. If the test passes on base and fails on head, the comment is labeled **PROVEN BUG**. It then proposes a one-line fix, verifies that the same test passes on the patched PR head, and posts a native GitHub review suggestion. A contributor can click **Commit suggestion** to apply it; the next PR run verifies the original test on the new head and reports **FIX VERIFIED**. Otherwise it is **NOT PROVEN** — PRoove never fabricates test output or claims.
 
 ---
 
@@ -14,7 +14,9 @@ PRoove analyzes a pull request, proposes a regression test via an OpenAI-compati
 4. The model proposes **at most one suspected regression** and a new Vitest test.
 5. The bot runs the same test against two git worktrees — the PR's actual base SHA and head SHA.
 6. Real exit codes determine the verdict: `base PASS + head FAIL → PROVEN BUG`.
-7. One PR timeline comment (marker `<!-- proove-review -->`) is created or updated by `github-actions[bot]`.
+7. For a proven bug, a second model request proposes one changed line. PRoove tests it on a temporary head worktree; if it passes, it posts a native GitHub suggestion on the PR diff.
+8. Clicking **Commit suggestion** creates a commit on the PR branch. A `synchronize` run repeats the original test and updates the PR timeline comment to **FIX VERIFIED** if it passes.
+9. One PR timeline comment (marker `<!-- proove-review -->`) is created or updated by `github-actions[bot]`. Suggestions are deduplicated per head SHA.
 
 ---
 
@@ -69,6 +71,7 @@ The PR **must be in the same repository** (not a fork) so secrets are available.
 
 Go to **Actions → PRoove — AI-assisted regression proof** and watch the run.
 After it completes, check the PR timeline — PRoove will have posted its comment.
+Follow its **Apply the verified suggestion** link to **Files changed**, click **Commit suggestion**, and wait for the next Actions run. The timeline comment should update to **FIX VERIFIED** for the new SHA.
 
 ---
 
@@ -79,9 +82,9 @@ npm install
 npm run bot:demo
 ```
 
-This uses a **mock model response** and runs the real proof on a local two-commit
+This uses **mock model and fix responses** and runs the real proof on a local two-commit
 temporary git repository. It prints the exact Markdown that would be posted as a PR
-comment. Expect `PROVEN BUG` in the output.
+comment. Expect `PROVEN BUG` and a locally verified fix; no GitHub suggestion is created by the local demo.
 
 ---
 
@@ -101,6 +104,7 @@ comment. Expect `PROVEN BUG` in the output.
 
 The comment appears on the **PR timeline** (Conversation tab).
 Marker: `<!-- proove-review -->` — re-runs update this comment, not a new one.
+A second comment on the changed line in **Files changed** contains the verified `suggestion` block. Applying it requires write access to the PR branch.
 
 ---
 
@@ -113,6 +117,7 @@ Marker: `<!-- proove-review -->` — re-runs update this comment, not a new one.
 | Missing demo fixture or executable dependencies | `NOT PROVEN` with an error or unsupported result |
 | Model API unreachable | Comment posted with error and `NOT PROVEN` |
 | Missing secrets | Workflow fails with a clear error message |
+| Candidate fix fails its regression test or cannot target a changed line | No suggestion is posted; the bug remains `PROVEN BUG` with a fix explanation |
 
 ---
 
@@ -126,6 +131,7 @@ bot/
   model.ts                      OpenAI-compatible LLM adapter
   proof.ts                      Worktree-based test execution engine
   comment.ts                    Markdown builder + Octokit PR comment upsert
+  suggestion.ts                 Diff line matching + GitHub suggestion posting
 fixtures/demo-repo/
   src/checkout.ts               Correct implementation (base revision)
   src/checkout.buggy.ts         Regression version (head revision source)
@@ -165,4 +171,4 @@ See [`.env.example`](.env.example) for the required environment variable names.
 
 ---
 
-*No fix available in this milestone.*
+*Fixes are constrained to a single changed line in the controlled demo fixture; arbitrary-repository automated fixes are not supported.*

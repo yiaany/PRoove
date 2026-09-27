@@ -12,11 +12,33 @@ import type { ModelCandidate } from "./model.js";
 export const COMMENT_MARKER = "<!-- proove-review -->";
 
 export interface CommentData {
+  baseSha?: string;
   headSha: string;
   candidate: ModelCandidate | null;
   proof: ProofResult | null;
   errorMessage?: string;
   isDemoMode?: boolean;
+  fixUrl?: string;
+  fixStatus?: string;
+  resolved?: boolean;
+}
+
+export interface StoredProof {
+  baseSha: string;
+  headSha: string;
+  candidate: ModelCandidate;
+}
+
+export function readStoredProof(body: string): StoredProof | null {
+  const match = /<!-- proove-proof:([A-Za-z0-9+/=]+) -->/.exec(body);
+  if (!match) return null;
+  try {
+    const data = JSON.parse(Buffer.from(match[1], "base64").toString("utf8")) as StoredProof;
+    if (!/^[0-9a-f]{7,40}$/.test(data.baseSha) || !/^[0-9a-f]{7,40}$/.test(data.headSha) ||
+      typeof data.candidate?.testCode !== "string" || data.candidate.testCode.length > 12000 ||
+      typeof data.candidate?.specRule !== "string" || typeof data.candidate?.suspectedBug !== "string") return null;
+    return data;
+  } catch { return null; }
 }
 
 function truncateLog(log: string, maxLines = 30): string {
@@ -35,13 +57,29 @@ function statusBadge(status: "PASS" | "FAIL" | "ERROR" | undefined): string {
  * Build the Markdown body for the PR comment.
  */
 export function buildCommentBody(data: CommentData): string {
-  const { headSha, candidate, proof, errorMessage, isDemoMode } = data;
+  const { headSha, candidate, proof, errorMessage, isDemoMode, fixUrl, fixStatus, resolved, baseSha } = data;
   const shortSha = headSha.slice(0, 7);
   const demoLabel = isDemoMode ? " · **MOCK DEMO**" : "";
 
   const lines: string[] = [COMMENT_MARKER];
+  if (baseSha && candidate && proof?.proven) {
+    lines.push(`<!-- proove-proof:${Buffer.from(JSON.stringify({ baseSha, headSha, candidate })).toString("base64")} -->`);
+  }
+  // Keep the original regression test available for the next PR synchronize run.
+  if (baseSha && candidate && resolved) {
+    lines.push(`<!-- proove-proof:${Buffer.from(JSON.stringify({ baseSha, headSha, candidate })).toString("base64")} -->`);
+  }
   lines.push(`## 🔍 PRoove Review — \`${shortSha}\`${demoLabel}`);
   lines.push("");
+
+  if (resolved && candidate && proof) {
+    lines.push("> ✅ **FIX VERIFIED** — The original regression test now passes on the PR head.", "");
+    lines.push(`**Head SHA:** \`${headSha}\``);
+    lines.push(`**Original bug:** ${candidate.suspectedBug}`);
+    lines.push(`**Regression test:** \`base ${statusBadge(proof.baseRun?.status)} / head ${statusBadge(proof.headRun?.status)}\``);
+    lines.push("", "<details><summary>Regression test</summary>", "", "```typescript", candidate.testCode, "```", "</details>");
+    return lines.join("\n");
+  }
 
   // Error reporting
   if (errorMessage) {
@@ -54,7 +92,7 @@ export function buildCommentBody(data: CommentData): string {
     lines.push("");
     lines.push(`**Head SHA:** \`${headSha}\``);
     lines.push("---");
-    lines.push("*No fix available in this milestone.*");
+    lines.push("*No verified fix available for this commit.*");
     return lines.join("\n");
   }
 
@@ -64,7 +102,7 @@ export function buildCommentBody(data: CommentData): string {
     lines.push("");
     lines.push(`**Head SHA:** \`${headSha}\``);
     lines.push("---");
-    lines.push("*No fix available in this milestone.*");
+    lines.push("*No verified fix available for this commit.*");
     return lines.join("\n");
   }
 
@@ -86,7 +124,7 @@ export function buildCommentBody(data: CommentData): string {
         "Candidate test shown above is unverified.",
     );
     lines.push("---");
-    lines.push("*No fix available in this milestone.*");
+    lines.push("*No verified fix available for this commit.*");
     return lines.join("\n");
   }
 
@@ -114,6 +152,12 @@ export function buildCommentBody(data: CommentData): string {
   lines.push(`| Base (correct) | ${statusBadge(proof?.baseRun?.status)} |`);
   lines.push(`| Head (PR)      | ${statusBadge(proof?.headRun?.status)} |`);
   lines.push("");
+
+  if (proven) {
+    lines.push(fixUrl ? `### ✅ Verified fix\n[Apply the verified suggestion in Files changed](${fixUrl}) — click **Commit suggestion**.` :
+      `### Fix\n${fixStatus ?? "No verified fix available for this commit."}`);
+    lines.push("");
+  }
 
   if (proof?.baseRun?.log) {
     lines.push("<details><summary>Base revision test log</summary>");
@@ -149,7 +193,7 @@ export function buildCommentBody(data: CommentData): string {
   }
 
   lines.push("---");
-  lines.push("*No fix available in this milestone.*");
+  if (!proven) lines.push("*No verified fix available for this commit.*");
 
   return lines.join("\n");
 }
@@ -163,6 +207,12 @@ export async function findExistingComment(
   repo: string,
   prNumber: number,
 ): Promise<number | null> {
+  return (await getExistingComment(octokit, owner, repo, prNumber))?.id ?? null;
+}
+
+export async function getExistingComment(
+  octokit: Octokit, owner: string, repo: string, prNumber: number,
+): Promise<{ id: number; body: string } | null> {
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
     owner,
     repo,
@@ -172,7 +222,7 @@ export async function findExistingComment(
 
   for (const comment of comments) {
     if (comment.user?.login === "github-actions[bot]" && comment.body?.includes(COMMENT_MARKER)) {
-      return comment.id;
+      return { id: comment.id, body: comment.body ?? "" };
     }
   }
   return null;

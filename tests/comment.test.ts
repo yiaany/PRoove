@@ -61,10 +61,9 @@ describe("buildCommentBody — PROVEN BUG", () => {
     expect(body).toContain("no negative price");
   });
 
-  it("does not claim fix is available", () => {
+  it("does not claim an unverified fix is available", () => {
     const body = buildCommentBody({ headSha: "abc1234", candidate, proof });
-    // The comment must say "No fix available in this milestone"
-    expect(body).toContain("No fix available in this milestone");
+    expect(body).toContain("No verified fix available for this commit");
   });
 });
 

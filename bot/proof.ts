@@ -36,6 +36,11 @@ export interface ProofResult {
   proven: boolean; // true only when base=PASS and head=FAIL
 }
 
+export interface FixProof {
+  status: RunStatus;
+  log: string;
+}
+
 /**
  * Safe minimal environment for child test processes.
  * Strips secrets and CI tokens so they are never accessible to demo code.
@@ -191,6 +196,41 @@ export async function runProof(
   } finally {
     if (baseWorktree) removeWorktree(demoRepoPath, baseWorktree);
     if (headWorktree) removeWorktree(demoRepoPath, headWorktree);
+  }
+}
+
+/** Test a proposed one-line fix against the exact PR head, without touching its branch. */
+export async function verifyFix(
+  repoPath: string,
+  headSha: string,
+  testCode: string,
+  oldLine: string,
+  newLine: string,
+  fixtureDir: FixtureDir,
+): Promise<FixProof> {
+  const worktree = checkoutWorktree(repoPath, headSha);
+  try {
+    const root = join(worktree, fixtureDir);
+    const sourceFile = join(root, "src", "checkout.ts");
+    if (!existsSync(sourceFile)) return { status: "ERROR", log: "Source file is missing" };
+    const source = readFileSync(sourceFile, "utf8");
+    const lines = source.split("\n");
+    if (lines.filter((line) => line.replace(/\r$/, "") === oldLine).length !== 1) {
+      return { status: "ERROR", log: "Fix target must match exactly one line of PR head" };
+    }
+    writeFileSync(sourceFile, lines.map((line) =>
+      line.replace(/\r$/, "") === oldLine ? newLine + (line.endsWith("\r") ? "\r" : "") : line).join("\n"));
+    const install = spawnSync(process.platform === "win32" ? "npm.cmd" : "npm",
+      ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--prefer-offline"], {
+        cwd: root, env: safeEnv(), timeout: 60_000, encoding: "utf8",
+        shell: process.platform === "win32",
+      });
+    if (install.status !== 0 || install.error) {
+      return { status: "ERROR", log: `Fix dependencies unavailable: ${String(install.error ?? install.stderr)}`.slice(0, 3000) };
+    }
+    return runTest(root, "tests/regression-candidate.test.ts", testCode);
+  } finally {
+    removeWorktree(repoPath, worktree);
   }
 }
 

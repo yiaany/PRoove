@@ -60,6 +60,10 @@ async function runDemoMode(): Promise<void> {
     baseSha,
     headSha,
     mockModelResponse: mockCandidate,
+    mockFixResponse: {
+      oldLine: "  return Math.round((price * (1 - discountPercent / 100)) * 100) / 100;",
+      newLine: "  return Math.round(Math.max(0, price * (1 - discountPercent / 100)) * 100) / 100;",
+    },
     repoPath: demoRepoPath,
     fixtureDir: ".",
     dryRun: true,

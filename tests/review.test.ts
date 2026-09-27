@@ -35,10 +35,28 @@ describe("same-repository PR proof", () => {
 import { applyDiscount } from "../src/checkout.js";
 it("does not return negative price", () => expect(applyDiscount(10, 150)).toBe(0));`,
         },
+        mockFixResponse: {
+          oldLine: "  return Math.round(discounted * 100) / 100;",
+          newLine: "  return Math.round(Math.max(0, discounted) * 100) / 100;",
+        },
       });
       expect(result.proven).toBe(true);
       expect(result.commentBody).toContain(headSha);
       expect(result.commentBody).toContain("PROVEN BUG");
+      expect(result.commentBody).toContain("Verified fix available");
+      const fixedSource = readFileSync(source, "utf8").replace("discounted * 100", "Math.max(0, discounted) * 100");
+      writeFileSync(source, fixedSource);
+      git("add", "fixtures/demo-repo/src/checkout.ts");
+      git("commit", "-m", "apply reviewed fix");
+      const fixedSha = git("rev-parse", "HEAD");
+      const rerun = await runReview({
+        owner: "demo", repo: "PRoove", prNumber: 1, repoPath: root,
+        fixtureDir: "fixtures/demo-repo", baseSha, headSha: fixedSha,
+        dryRun: true, previousCommentBody: result.commentBody,
+      });
+      expect(rerun.proven).toBe(false);
+      expect(rerun.commentBody).toContain("FIX VERIFIED");
+      expect(rerun.commentBody).toContain(fixedSha);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

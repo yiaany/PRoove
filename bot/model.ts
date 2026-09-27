@@ -18,6 +18,16 @@ export interface ModelCandidate {
   testCode: string; // a complete Vitest test file (TypeScript)
 }
 
+export interface FixCandidate {
+  oldLine: string;
+  newLine: string;
+}
+
+const FixSchema = z.object({
+  oldLine: z.string().min(1).max(500),
+  newLine: z.string().min(1).max(500),
+});
+
 const CandidateSchema = z.object({
   suspectedBug: z.string().min(1),
   specRule: z.string().min(1),
@@ -109,4 +119,36 @@ export async function askModel(
     return null; // model found no regression
   }
   return candidate;
+}
+
+/** Ask for a single-line replacement; the proof runner validates it separately. */
+export async function askFix(
+  spec: string,
+  diff: string,
+  candidate: ModelCandidate,
+  source: string,
+  mockResponse?: FixCandidate | null,
+): Promise<FixCandidate | null> {
+  if (mockResponse !== undefined) return mockResponse;
+  const baseURL = process.env.OPENAI_COMPAT_BASE_URL;
+  const apiKey = process.env.OPENAI_COMPAT_API_KEY;
+  const model = process.env.OPENAI_COMPAT_MODEL;
+  if (!baseURL || !apiKey || !model) throw new Error("Missing model provider settings");
+  const client = new OpenAI({ baseURL, apiKey });
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0,
+    max_tokens: 400,
+    messages: [
+      { role: "system", content: `You fix a proven regression in src/checkout.ts. Reply ONLY with JSON: {"oldLine":"<complete existing changed line>","newLine":"<complete replacement line>"}. Both values must be exactly ONE line with original indentation. oldLine MUST be an added line in the diff. Change only that one line. The new line must satisfy the documented rule and pass the provided regression test. If a one-line fix is not possible, return {"oldLine":"","newLine":""}.` },
+      { role: "user", content: `SPEC:\n${spec.slice(0, 4000)}\nDIFF:\n${diff.slice(0, 8000)}\nPROVEN BUG: ${candidate.suspectedBug}\nTEST:\n${candidate.testCode.slice(0, 4000)}\nHEAD SOURCE:\n${source.slice(0, 8000)}` },
+    ],
+  });
+  const raw = (response.choices[0]?.message?.content ?? "").replace(/^```[^\n]*\n?/, "").replace(/```$/, "").trim();
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { throw new Error("Model returned invalid fix JSON"); }
+  if (typeof parsed === "object" && parsed !== null && "oldLine" in parsed && parsed.oldLine === "") return null;
+  const result = FixSchema.safeParse(parsed);
+  if (!result.success) throw new Error("Model returned an invalid fix");
+  return result.data;
 }
