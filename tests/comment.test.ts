@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   buildCommentBody,
   COMMENT_MARKER,
+  readStoredProof,
   findExistingComment,
   upsertComment,
 } from "../bot/comment.js";
@@ -64,6 +65,44 @@ describe("buildCommentBody — PROVEN BUG", () => {
   it("does not claim an unverified fix is available", () => {
     const body = buildCommentBody({ headSha: "abc1234", candidate, proof });
     expect(body).toContain("No verified fix available for this commit");
+  });
+
+  it("renders a compact evidence card with measured runtime and collapsible details", () => {
+    const body = buildCommentBody({
+      baseSha: "1234567a", headSha: "abcdef1234", candidate,
+      proof: { ...proof, durationMs: 2450 },
+      fixUrl: "https://github.com/example/repo/pull/1#discussion_r1",
+      runUrl: "https://github.com/example/repo/actions/runs/42",
+    });
+    expect(body).toContain("## PRoove · Proof Card");
+    expect(body).toContain("| Same regression test | ✅ PASS | ❌ FAIL |");
+    expect(body).toContain("2.5s total");
+    expect(body).toContain("Apply the verified fix");
+    expect(body).toContain("actions/runs/42");
+    expect(body).toContain("<details><summary>Regression test · source</summary>");
+    expect(body).toContain("<details><summary>PR revision · test log</summary>");
+    expect(readStoredProof(body)).toEqual({ baseSha: "1234567a", headSha: "abcdef1234", candidate });
+  });
+
+  it("uses a longer fence when model output contains triple backticks", () => {
+    const body = buildCommentBody({ headSha: "abcdef1",
+      candidate: { ...candidate, testCode: "// ```\nit('example', () => {});" }, proof });
+    expect(body).toContain("````typescript\n// ```");
+  });
+});
+
+describe("buildCommentBody — FIX VERIFIED", () => {
+  it("keeps the original test and clearly distinguishes a verified fix from a proven bug", () => {
+    const candidate: ModelCandidate = { suspectedBug: "negative price", specRule: "price >= 0", testCode: "it('price', () => {});" };
+    const body = buildCommentBody({ baseSha: "abcdef1", headSha: "abcdef2", candidate,
+      proof: { supported: true, proven: false,
+        baseRun: { status: "PASS", log: "1 passed" }, headRun: { status: "PASS", log: "1 passed" } },
+      resolved: true });
+    expect(body).toContain("FIX VERIFIED");
+    expect(body).toContain("| Same regression test | ✅ PASS | ✅ PASS |");
+    expect(body).toContain("this specific regression is no longer reproducible");
+    expect(body).not.toContain("PROVEN BUG");
+    expect(readStoredProof(body)?.candidate).toEqual(candidate);
   });
 });
 

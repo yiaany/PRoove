@@ -21,6 +21,7 @@ export interface CommentData {
   fixUrl?: string;
   fixStatus?: string;
   resolved?: boolean;
+  runUrl?: string;
 }
 
 export interface StoredProof {
@@ -53,148 +54,81 @@ function statusBadge(status: "PASS" | "FAIL" | "ERROR" | undefined): string {
   return "⚠️ ERROR";
 }
 
+function inline(text: string): string {
+  return text.replace(/\s+/g, " ").replace(/\\/g, "\\\\").replace(/([|`*_<])/g, "\\$1").trim();
+}
+
+function fenced(text: string, language = ""): string {
+  const longest = Math.max(2, ...Array.from(text.matchAll(/`+/g), ([match]) => match.length));
+  const fence = "`".repeat(longest + 1);
+  return `${fence}${language}\n${text}\n${fence}`;
+}
+
+function details(title: string, text: string, language = ""): string[] {
+  return [`<details><summary>${title}</summary>`, "", fenced(text, language), "", "</details>", ""];
+}
+
+function elapsed(milliseconds: number | undefined): string {
+  return milliseconds === undefined ? "—" : `${(milliseconds / 1000).toFixed(1)}s`;
+}
+
 /**
  * Build the Markdown body for the PR comment.
  */
 export function buildCommentBody(data: CommentData): string {
-  const { headSha, candidate, proof, errorMessage, isDemoMode, fixUrl, fixStatus, resolved, baseSha } = data;
-  const shortSha = headSha.slice(0, 7);
+  const { headSha, candidate, proof, errorMessage, isDemoMode, fixUrl, fixStatus, resolved, baseSha, runUrl } = data;
   const demoLabel = isDemoMode ? " · **MOCK DEMO**" : "";
-
   const lines: string[] = [COMMENT_MARKER];
-  if (baseSha && candidate && proof?.proven) {
+  // Keep the original regression test available on the next synchronize run.
+  if (baseSha && candidate && (proof?.proven || resolved)) {
     lines.push(`<!-- proove-proof:${Buffer.from(JSON.stringify({ baseSha, headSha, candidate })).toString("base64")} -->`);
   }
-  // Keep the original regression test available for the next PR synchronize run.
-  if (baseSha && candidate && resolved) {
-    lines.push(`<!-- proove-proof:${Buffer.from(JSON.stringify({ baseSha, headSha, candidate })).toString("base64")} -->`);
-  }
-  lines.push(`## 🔍 PRoove Review — \`${shortSha}\`${demoLabel}`);
-  lines.push("");
-
-  if (resolved && candidate && proof) {
-    lines.push("> ✅ **FIX VERIFIED** — The original regression test now passes on the PR head.", "");
-    lines.push(`**Head SHA:** \`${headSha}\``);
-    lines.push(`**Original bug:** ${candidate.suspectedBug}`);
-    lines.push(`**Regression test:** \`base ${statusBadge(proof.baseRun?.status)} / head ${statusBadge(proof.headRun?.status)}\``);
-    lines.push("", "<details><summary>Regression test</summary>", "", "```typescript", candidate.testCode, "```", "</details>");
-    return lines.join("\n");
-  }
-
-  // Error reporting
-  if (errorMessage) {
-    lines.push(`> ⚠️ **NOT PROVEN** — Review encountered an error.`);
-    lines.push("");
-    lines.push("**Error:**");
-    lines.push("```");
-    lines.push(errorMessage);
-    lines.push("```");
-    lines.push("");
-    lines.push(`**Head SHA:** \`${headSha}\``);
-    lines.push("---");
-    lines.push("*No verified fix available for this commit.*");
-    return lines.join("\n");
-  }
-
-  // No candidate
-  if (!candidate) {
-    lines.push(`> ℹ️ **NOT PROVEN** — No regression candidate identified in this diff.`);
-    lines.push("");
-    lines.push(`**Head SHA:** \`${headSha}\``);
-    lines.push("---");
-    lines.push("*No verified fix available for this commit.*");
-    return lines.join("\n");
-  }
-
-  // Proof unsupported (non-demo repository)
-  if (proof && !proof.supported) {
-    lines.push(`> ℹ️ **NOT PROVEN** — Executable proof is unsupported for this repository.`);
-    lines.push("");
-    lines.push(`**Suspected bug:** ${candidate.suspectedBug}`);
-    lines.push(`**SPEC rule:** *${candidate.specRule}*`);
-    lines.push("");
-    lines.push("**Proposed regression test:**");
-    lines.push("```typescript");
-    lines.push(candidate.testCode);
-    lines.push("```");
-    lines.push("");
-    lines.push(`**Head SHA:** \`${headSha}\``);
-    lines.push(
-      "> Executable proof requires the known demo repository. " +
-        "Candidate test shown above is unverified.",
-    );
-    lines.push("---");
-    lines.push("*No verified fix available for this commit.*");
-    return lines.join("\n");
-  }
-
-  // Full proof result
   const proven = proof?.proven ?? false;
-  const verdict = proven ? "🐛 **PROVEN BUG**" : "ℹ️ **NOT PROVEN**";
+  const verdict = resolved ? "✅ FIX VERIFIED" : proven ? "🐛 PROVEN BUG" : "ℹ️ NOT PROVEN";
+  lines.push(`## PRoove · Proof Card${demoLabel}`, "", `### ${verdict}`, "");
+  lines.push(resolved ? "> The original regression test now passes on the PR head." :
+    proven ? "> The same new test passes before this PR and fails on the changed revision." :
+    "> No regression has been demonstrated for this revision.", "");
 
-  lines.push(`> ${verdict}`);
-  lines.push("");
-  lines.push(`**Head SHA:** \`${headSha}\``);
-  lines.push(`**Suspected bug:** ${candidate.suspectedBug}`);
-  lines.push(`**SPEC rule:** *${candidate.specRule}*`);
-  lines.push("");
-  lines.push("### Proposed Regression Test");
-  lines.push("```typescript");
-  lines.push(candidate.testCode);
-  lines.push("```");
-  lines.push("");
-  lines.push("### Verification Results");
-  lines.push("");
-  lines.push(
-    `| Revision | Result |`,
-  );
-  lines.push(`|----------|--------|`);
-  lines.push(`| Base (correct) | ${statusBadge(proof?.baseRun?.status)} |`);
-  lines.push(`| Head (PR)      | ${statusBadge(proof?.headRun?.status)} |`);
-  lines.push("");
+  lines.push("| Evidence | Base revision | PR revision |", "|:--|:--|:--|",
+    `| Commit | ${baseSha ? `\`${baseSha.slice(0, 7)}\`` : "—"} | \`${headSha.slice(0, 7)}\` |`,
+    `| Same regression test | ${proof?.baseRun ? statusBadge(proof.baseRun.status) : "—"} | ${proof?.headRun ? statusBadge(proof.headRun.status) : "—"} |`,
+    `| Proof runtime | ${proof?.durationMs !== undefined ? elapsed(proof.durationMs) + " total" : "—"} | ${resolved ? "Fix confirmed" : proven ? "Bug reproduced" : "Not proven"} |`, "");
+  if (runUrl) lines.push(`**[View the GitHub Actions run](${runUrl})** · Full audit trail for this revision.`, "");
 
-  if (proven) {
-    lines.push(fixUrl ? `### ✅ Verified fix\n[Apply the verified suggestion in Files changed](${fixUrl}) — click **Commit suggestion**.` :
-      `### Fix\n${fixStatus ?? "No verified fix available for this commit."}`);
-    lines.push("");
+  if (candidate) {
+    lines.push(`**Finding:** ${inline(candidate.suspectedBug)}`, "");
+    lines.push("**Expected behavior · base `SPEC.md`**", "",
+      ...candidate.specRule.trim().split(/\r?\n/).map((line) => `> ${line}`), "");
+  }
+  if (proof?.headRun?.status === "FAIL" && proof.headRun.log) {
+    lines.push(`**Observed on PR head:** ${inline(proof.headRun.log.split(/\r?\n/)[0].slice(0, 220))}`, "");
   }
 
-  if (proof?.baseRun?.log) {
-    lines.push("<details><summary>Base revision test log</summary>");
-    lines.push("");
-    lines.push("```");
-    lines.push(truncateLog(proof.baseRun.log));
-    lines.push("```");
-    lines.push("</details>");
-    lines.push("");
+  if (resolved) {
+    lines.push("### Resolution", "", "**Fix verified.** The original test now passes on both revisions; the previous suggestion was applied or the behavior was otherwise corrected.", "");
+  } else if (proven && fixUrl) {
+    lines.push("### Apply the verified fix", "", `**[Open the GitHub suggestion in Files changed](${fixUrl})** → click **Commit suggestion**.`, "",
+      "PRoove ran the regression test again on a temporary copy of the PR head with the proposed line replacement. The suggestion is never applied without your approval.", "");
+  } else if (proven) {
+    lines.push("### Fix status", "", inline(fixStatus ?? "No verified fix available for this commit."), "");
+  } else {
+    const explanation = errorMessage ? "Review encountered an error; no proof or fix is claimed." :
+      !candidate ? "No regression candidate identified in this diff." :
+      proof && !proof.supported ? "Executable proof is unsupported for this repository." :
+      proof?.baseRun?.status === "FAIL" && proof.headRun?.status === "FAIL" ? "Both revisions failed — test may be incorrect or candidate is wrong." :
+      proof?.baseRun?.status === "PASS" && proof.headRun?.status === "PASS" ? "Both revisions passed — candidate test did not detect a regression." :
+      proof?.baseRun && proof.baseRun.status !== "PASS" ? "Base revision did not pass — cannot confirm regression." :
+      "Test could not confirm a regression.";
+    lines.push(`**Why:** ${explanation}`, "", "*No verified fix available for this commit.*", "");
   }
 
-  if (proof?.headRun?.log) {
-    lines.push("<details><summary>Head revision test log</summary>");
-    lines.push("");
-    lines.push("```");
-    lines.push(truncateLog(proof.headRun.log));
-    lines.push("```");
-    lines.push("</details>");
-    lines.push("");
-  }
-
-  if (!proven && proof?.baseRun && proof?.headRun) {
-    const baseStatus = proof.baseRun.status;
-    const headStatus = proof.headRun.status;
-    if (baseStatus === "FAIL" && headStatus === "FAIL") {
-      lines.push("> Both revisions failed — test may be incorrect or candidate is wrong.");
-    } else if (baseStatus === "PASS" && headStatus === "PASS") {
-      lines.push("> Both revisions passed — candidate test did not detect a regression.");
-    } else if (baseStatus !== "PASS") {
-      lines.push("> Base revision did not pass — cannot confirm regression.");
-    }
-    lines.push("");
-  }
-
-  lines.push("---");
-  if (!proven) lines.push("*No verified fix available for this commit.*");
-
+  lines.push("---", "", "#### Inspect the evidence", "");
+  if (candidate) lines.push(...details("Regression test · source", candidate.testCode, "typescript"));
+  if (proof?.baseRun?.log) lines.push(...details("Base revision · test log", truncateLog(proof.baseRun.log)));
+  if (proof?.headRun?.log) lines.push(...details("PR revision · test log", truncateLog(proof.headRun.log)));
+  if (errorMessage) lines.push(...details("Review error", errorMessage.slice(0, 3000)));
+  lines.push(`<sub>PRoove · evidence from actual Git commits${isDemoMode ? " · local mock candidate" : ""}. A passing test on both revisions means this specific regression is no longer reproducible; it does not certify the entire PR.</sub>`);
   return lines.join("\n");
 }
 

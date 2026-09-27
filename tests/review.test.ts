@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runReview } from "../bot/review.js";
+import { readStoredProof } from "../bot/comment.js";
 import { DEMO_REPO_SOURCE } from "../bot/proof.js";
 
 describe("same-repository PR proof", () => {
@@ -41,7 +42,8 @@ it("does not return negative price", () => expect(applyDiscount(10, 150)).toBe(0
         },
       });
       expect(result.proven).toBe(true);
-      expect(result.commentBody).toContain(headSha);
+      expect(result.commentBody).toContain(headSha.slice(0, 7));
+      expect(readStoredProof(result.commentBody)?.headSha).toBe(headSha);
       expect(result.commentBody).toContain("PROVEN BUG");
       expect(result.commentBody).toContain("Verified fix available");
       const fixedSource = readFileSync(source, "utf8").replace("discounted * 100", "Math.max(0, discounted) * 100");
@@ -56,7 +58,8 @@ it("does not return negative price", () => expect(applyDiscount(10, 150)).toBe(0
       });
       expect(rerun.proven).toBe(false);
       expect(rerun.commentBody).toContain("FIX VERIFIED");
-      expect(rerun.commentBody).toContain(fixedSha);
+      expect(rerun.commentBody).toContain(fixedSha.slice(0, 7));
+      expect(readStoredProof(rerun.commentBody)?.headSha).toBe(fixedSha);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

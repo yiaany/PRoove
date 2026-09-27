@@ -34,6 +34,7 @@ export interface ProofResult {
   baseRun?: ProofRun;
   headRun?: ProofRun;
   proven: boolean; // true only when base=PASS and head=FAIL
+  durationMs?: number; // measured wall-clock time including worktree setup
 }
 
 export interface FixProof {
@@ -159,6 +160,8 @@ export async function runProof(
     return { supported: false, proven: false };
   }
 
+  const started = performance.now();
+
   let baseWorktree: string | null = null;
   let headWorktree: string | null = null;
 
@@ -192,7 +195,7 @@ export async function runProof(
     const headRun = runTest(join(headWorktree, fixtureDir), "tests/regression-candidate.test.ts", testCode);
 
     const proven = baseRun.status === "PASS" && headRun.status === "FAIL";
-    return { supported: true, baseRun, headRun, proven };
+    return { supported: true, baseRun, headRun, proven, durationMs: Math.round(performance.now() - started) };
   } finally {
     if (baseWorktree) removeWorktree(demoRepoPath, baseWorktree);
     if (headWorktree) removeWorktree(demoRepoPath, headWorktree);

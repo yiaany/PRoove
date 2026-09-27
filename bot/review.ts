@@ -26,6 +26,7 @@ export interface ReviewOutput {
   commentBody: string;
   commentUrl?: string;
   proven: boolean;
+  resolved: boolean;
 }
 
 export async function runReview(input: ReviewInput): Promise<ReviewOutput> {
@@ -113,12 +114,17 @@ export async function runReview(input: ReviewInput): Promise<ReviewOutput> {
     errorMessage = String(err);
   }
 
+  const server = process.env.GITHUB_SERVER_URL;
+  const repository = process.env.GITHUB_REPOSITORY;
+  const runId = process.env.GITHUB_RUN_ID;
+  const runUrl = !dryRun && server && repository && /^\d+$/.test(runId ?? "") ?
+    `${server}/${repository}/actions/runs/${runId}` : undefined;
   const commentBody = buildCommentBody({ baseSha, headSha, candidate, proof, errorMessage,
-    isDemoMode, fixUrl, fixStatus, resolved });
+    isDemoMode, fixUrl, fixStatus, resolved, runUrl });
   let commentUrl: string | undefined;
   if (!dryRun) {
     if (!token) throw new Error("GITHUB_TOKEN is required to post comment");
     commentUrl = await upsertComment(octokit!, owner, repo, prNumber, commentBody);
   }
-  return { commentBody, commentUrl, proven: proof?.proven ?? false };
+  return { commentBody, commentUrl, proven: proof?.proven ?? false, resolved };
 }

@@ -139,7 +139,7 @@ async function runLiveMode(): Promise<void> {
   });
 
   console.log(`\nComment posted: ${result.commentUrl ?? "(dry-run)"}`);
-  console.log(`Verdict: ${result.proven ? "PROVEN BUG" : "NOT PROVEN"}`);
+  console.log(`Verdict: ${result.resolved ? "FIX VERIFIED" : result.proven ? "PROVEN BUG" : "NOT PROVEN"}`);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
