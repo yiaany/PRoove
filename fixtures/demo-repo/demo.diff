@@ -1,0 +1,11 @@
+diff --git a/src/checkout.ts b/src/checkout.ts
+index abc1234..def5678 100644
+--- a/src/checkout.ts
++++ b/src/checkout.ts
+@@ -12,7 +12,7 @@ export function applyDiscount(price: number, discountPercent: number): number {
+-  const discounted = price * (1 - discountPercent / 100);
+-  // Clamp to 0 — price must never go negative (SPEC rule 1)
+-  return Math.round(Math.max(0, discounted) * 100) / 100;
++  // BUG: removed the Math.max(0, ...) clamp — price can go negative
++  return Math.round((price * (1 - discountPercent / 100)) * 100) / 100;
+ }

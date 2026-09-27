@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment secrets
+.env
+.env.local
+
+# Next.js (if added later)
+.next/
+out/
+
+# Temporary demo repositories and proof worktrees
+# (stored in OS temp dir, not project root)
+
+# Test coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Keep bob_sessions/ tracked (do NOT add it here)

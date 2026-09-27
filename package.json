@@ -1,0 +1,24 @@
+{
+  "name": "proove",
+  "version": "0.1.0",
+  "description": "GitHub Actions code-review bot that proves regressions with reproducible test evidence",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.bot.json",
+    "typecheck": "tsc -p tsconfig.bot.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "bot:demo": "node dist/bot/cli.js --demo",
+    "lint": "echo \"no linter configured\""
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.2",
+    "openai": "^4.67.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}
